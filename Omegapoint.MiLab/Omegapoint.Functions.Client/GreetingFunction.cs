@@ -20,6 +20,7 @@ public class GreetingFunction
     {
         _httpClient = httpClientFactory.CreateClient();
         _httpClient.BaseAddress = new Uri("https://func-lindis.azurewebsites.net/");
+        _httpClient.BaseAddress = new Uri("http://localhost:7071/api/");
     }
 
     [FunctionName("GreetingFunction")]
@@ -31,7 +32,7 @@ public class GreetingFunction
 
         var scopes = new[]
         {
-            ""
+            "api://6ce61091-e3f4-4e04-b7d4-fb007b7cb1ad"
         };
 
         var managedIdentityAzureCredential = new DefaultAzureCredential(new DefaultAzureCredentialOptions());
