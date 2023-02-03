@@ -1,0 +1,9 @@
+{
+  "profiles": {
+    "Omegapoint.Functions": {
+      "commandName": "Project",
+      "commandLineArgs": "--port 7266",
+      "launchBrowser": false
+    }
+  }
+}
