@@ -9,13 +9,13 @@
  Connect-AzureAD -TenantId $tenantID
   
  # Look up the web app's managed identity's object ID.
- #$managedIdentity = (Get-AzureADServicePrincipal -Filter "DisplayName eq '$managedIdentityName'")
- #$managedIdentityObjectId = $managedIdentity.ObjectId
+ $managedIdentity = (Get-AzureADServicePrincipal -Filter "DisplayName eq '$managedIdentityName'")
+ $managedIdentityObjectId = $managedIdentity.ObjectId
   
  # Look up the details about the server app's service principal and app role.
- #$serverServicePrincipal = (Get-AzureADServicePrincipal -Filter "DisplayName eq '$serverApplicationName'")
- #$serverServicePrincipalObjectId = $serverServicePrincipal.ObjectId
- #$appRoleId = ($serverServicePrincipal.AppRoles | Where-Object {$_.Value -eq $appRoleName }).Id
+ $serverServicePrincipal = (Get-AzureADServicePrincipal -Filter "DisplayName eq '$serverApplicationName'")
+ $serverServicePrincipalObjectId = $serverServicePrincipal.ObjectId
+ $appRoleId = ($serverServicePrincipal.AppRoles | Where-Object {$_.Value -eq $appRoleName }).Id
   
  $managedIdentityObjectId = "50b3e21d-76f1-4397-8950-b424f5915ac2"
  $serverServicePrincipalObjectId = "74a0edcb-9a34-4427-9644-b1707faef23a"
