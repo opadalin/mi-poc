@@ -1,68 +1,109 @@
 using System;
+using System.Collections.Generic;
 using System.Net;
 using System.Net.Http;
+using System.Threading;
 using System.Threading.Tasks;
-using Azure.Core;
-using Azure.Identity;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Azure.WebJobs;
 using Microsoft.Azure.WebJobs.Extensions.Http;
 using Microsoft.Extensions.Logging;
+using Invidem.Common.RemoteService;
+using Invidem.Common.RemoteService.RetryPolicy;
 
 namespace Omegapoint.Functions.Client;
 
 public class GreetingFunction
 {
-    private readonly HttpClient _httpClient;
+    private readonly ILogger<GreetingFunction> _logger;
 
-    public GreetingFunction(IHttpClientFactory httpClientFactory)
+    private readonly ITokenService _tokenService;
+    private readonly IRemoteServer _remoteServer;
+
+
+    public GreetingFunction(
+        ITokenService tokenService,
+        IRemoteServer remoteServer,
+        ILoggerFactory loggerFactory)
     {
-        _httpClient = httpClientFactory.CreateClient();
-        _httpClient.BaseAddress = new Uri("https://func-lindis.azurewebsites.net/api/");
-        //_httpClient.BaseAddress = new Uri("http://localhost:7071/api/");
+        ArgumentNullException.ThrowIfNull(tokenService);
+        ArgumentNullException.ThrowIfNull(remoteServer);
+        ArgumentNullException.ThrowIfNull(loggerFactory);
+
+        _logger = loggerFactory.CreateLogger<GreetingFunction>();
+        _tokenService = tokenService;
+        _remoteServer = remoteServer;
+        // _httpClient.BaseAddress = new Uri("https://func-lindis.azurewebsites.net/api/");
     }
 
     [FunctionName("GreetingFunction")]
     public async Task<IActionResult> RunAsync(
         [HttpTrigger(AuthorizationLevel.Function, "get", Route = "greeting")]
-        HttpRequest req, ILogger log)
+        HttpRequest req)
     {
-        log.LogInformation("Entered greeting function");
-        var scopes = new[]
-        {
-            "api://6ce61091-e3f4-4e04-b7d4-fb007b7cb1ad"
-        };
+        //const string scopes = "api://6ce61091-e3f4-4e04-b7d4-fb007b7cb1ad";
 
-        var managedIdentityAzureCredential = new DefaultAzureCredential(new DefaultAzureCredentialOptions()
-        {
-            ExcludeSharedTokenCacheCredential = false
-        });
-        var accessToken = await managedIdentityAzureCredential.GetTokenAsync(new TokenRequestContext(scopes));
+        _logger.LogInformation("Entered greeting function");
+        //var token = await _tokenService.GetTokenAsync(scopes, _logger);
 
-        var token = accessToken.Token;
+        _logger.LogInformation("Greeting is sent to downstream server");
+        var responseFromRemoteServer = await _remoteServer.HelloServer("hello", "replace");
         
-        log.LogInformation("Received token from DefaultAzureCredential");
+        var content = await responseFromRemoteServer.Content.ReadAsStringAsync();
+
+        _logger.LogInformation("Received token from DefaultAzureCredential, {Content}", content);
         
-        var httpRequest = new HttpRequestMessage
+        if (!responseFromRemoteServer.IsSuccessStatusCode)
         {
-            Method = HttpMethod.Get,
-            RequestUri = new Uri("https://func-lindis.azurewebsites.net/api/hello"),
-            Headers = {{"Authorization", token},
-            {"x-functions-key", "replace"}}
-        };
-
-        var response = await _httpClient.SendAsync(httpRequest);
-        log.LogInformation("Greeting is sent to downstream server");
-
-        if (!response.IsSuccessStatusCode)
-        {
-            return new ObjectResult(HttpStatusCode.InternalServerError +
-                                    ": Received unsuccessful response from server");
+            _logger.LogInformation("Status code from server: {Code}, Message: {Message}",
+                responseFromRemoteServer.StatusCode, content);
+            return new ObjectResult(responseFromRemoteServer.StatusCode +
+                                    $": Received unsuccessful response from server  Message: {content}" );
         }
 
-        var content = await response.Content.ReadAsStringAsync();
-
         return await Task.FromResult(new OkObjectResult($"Response from server: {content}"));
+    }
+}
+
+public interface IRemoteServer
+{
+    Task<HttpResponseMessage> HelloServer(string requestUri, string functionsKey);
+}
+
+public class RemoteServer : RemoteServiceBase, IRemoteServer
+{
+    public RemoteServer(
+        RemoteServiceConfigurationBase configuration,
+        IRemoteServiceRetryPolicyFactory retryPolicyFactory,
+        IHttpClientFactory httpClientFactory,
+        ILoggerFactory loggerFactory,
+        ITokenService tokenService)
+        : base(
+            configuration,
+            retryPolicyFactory.CreatePolicy<RemoteServer>(),
+            httpClientFactory.CreateClient(),
+            loggerFactory.CreateLogger<RemoteServer>(),
+            tokenService)
+    {
+    }
+
+    public async Task<HttpResponseMessage> HelloServer(string requestUri, string functionsKey)
+    {
+        return await GetAsync(requestUri, CancellationToken.None, new Dictionary<string, string>()
+        {
+            {"x-functions-key", functionsKey}
+        });
+    }
+}
+
+public class RemoteServerConfig : RemoteServiceConfigurationBase
+{
+    public RemoteServerConfig(
+        string baseUri,
+        string apiKey,
+        string scope)
+        : base(baseUri, apiKey, scope)
+    {
     }
 }
