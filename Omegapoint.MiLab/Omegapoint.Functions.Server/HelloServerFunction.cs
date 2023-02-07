@@ -15,7 +15,7 @@ public static class HelloServerFunction
         HttpRequest req, ILogger log)
     {
         log.LogInformation("Server received request");
-
+        // hello
         var token = req.Headers["Authorization"];
 
         return await Task.FromResult(new OkObjectResult($"Hello client, you sent this token:\n\n {token}"));
