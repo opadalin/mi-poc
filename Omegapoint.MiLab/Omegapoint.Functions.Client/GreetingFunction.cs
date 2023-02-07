@@ -19,8 +19,8 @@ public class GreetingFunction
     public GreetingFunction(IHttpClientFactory httpClientFactory)
     {
         _httpClient = httpClientFactory.CreateClient();
-        _httpClient.BaseAddress = new Uri("https://func-lindis.azurewebsites.net/");
-        _httpClient.BaseAddress = new Uri("http://localhost:7071/api/");
+        _httpClient.BaseAddress = new Uri("https://func-lindis.azurewebsites.net/api/");
+        //_httpClient.BaseAddress = new Uri("http://localhost:7071/api/");
     }
 
     [FunctionName("GreetingFunction")]
@@ -28,25 +28,32 @@ public class GreetingFunction
         [HttpTrigger(AuthorizationLevel.Function, "get", Route = "greeting")]
         HttpRequest req, ILogger log)
     {
-        log.LogInformation("Greeting is sent to server");
-
+        log.LogInformation("Entered greeting function");
         var scopes = new[]
         {
             "api://6ce61091-e3f4-4e04-b7d4-fb007b7cb1ad"
         };
 
-        var managedIdentityAzureCredential = new DefaultAzureCredential(new DefaultAzureCredentialOptions());
+        var managedIdentityAzureCredential = new DefaultAzureCredential(new DefaultAzureCredentialOptions()
+        {
+            ExcludeSharedTokenCacheCredential = false
+        });
         var accessToken = await managedIdentityAzureCredential.GetTokenAsync(new TokenRequestContext(scopes));
+
         var token = accessToken.Token;
+        
+        log.LogInformation("Received token from DefaultAzureCredential");
         
         var httpRequest = new HttpRequestMessage
         {
             Method = HttpMethod.Get,
-            RequestUri = new Uri("hello"),
-            Headers = {{"Authorization", token}}
+            RequestUri = new Uri("https://func-lindis.azurewebsites.net/api/hello"),
+            Headers = {{"Authorization", token},
+            {"x-functions-key", "replace"}}
         };
 
         var response = await _httpClient.SendAsync(httpRequest);
+        log.LogInformation("Greeting is sent to downstream server");
 
         if (!response.IsSuccessStatusCode)
         {
